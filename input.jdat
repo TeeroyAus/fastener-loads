@@ -1,0 +1,31 @@
+# A leading # denotes a comment line
+# a leading * followed by a capitalised word denotes a 
+# keyword
+
+*MATERIAL
+Es:10500000
+Ed:10500000
+Ef:10500000
+
+*FASTENER
+# Fastener number and details
+NFast:3
+
+# Fastn: Dfast, Type
+# Type: 1= AL, 2 = Steel, 3=Titanium
+Fast0:0.125,1
+Fast1:0.125,1
+Fast2:0.125,1
+
+*JOINT
+# P: Load
+# Segn:L, Ts-avg, Td-avg, W , Ad(if not regular strip)
+# Ad is an optional argument. If it is not present then 
+# it is calculated as Ad = Td-avg * W
+
+P:1000
+Seg0:0.5,0.050,0.063,1
+Seg1:0.5,0.050,0.063,1
+Seg2:0.5,0.050,0.063,1
+
+*VERBOSE

@@ -8,15 +8,14 @@
 # Copyright:   (c) Troy 2015
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+
 
 def main():
     import numpy as np
-##    a = np.array([[1,1,0],[0,10,1],[0,1,1]])
-##    b=np.array([1,2,3])
-##    c = np.linalg.solve(a,b)
-##    print c
-
-    from string import split,join
+    from string import split, join, capitalize
     import sys
     # Select and Open Input File
     # Use Tkinter to create filedialog GUI
@@ -68,6 +67,7 @@ def main():
                 Ed = float(Temp[1])
 ##                print "%s = %.2f" % (Temp[0],Ed)
             if Temp[0] =="Ef":
+            # This assumes that only a single fastener type is used in the joint
                 Ef = float(Temp[1])
 ##                print "%s = %.2f" % (Temp[0],Ef)
 
@@ -96,6 +96,20 @@ def main():
                 Temp = split(Temp[1],",")
                 DFast[n] =float(Temp[0])
                 FastType[n] =Temp[1]
+# New in V0.60 choose the equation type to calculate the
+# fastener compliance value
+            fastener_comp_type = "swift" #test case only
+
+            if fastener_comp_type =="huth":
+                compliance_calculation =  function_name###
+            elif fastener_comp_type =="tate":
+                compliance_calculation = function_name###
+            elif fastener_comp_type =="huth":
+                compliance_calculation =  function_name###
+            elif fastener_comp_type =="huth":
+                compliance_calculation =  function_name###
+            else:
+                compliance_calculation = "swift"
 
 # In JOINT Group expected data are: Seg(n).
         if joint and line[0]!="*":
@@ -124,13 +138,15 @@ def main():
     Cd = plate_compliance(Length,Ed,Ad,no_of_fasteners)
     Cf =fastener_compliance(DFast,Ef,Es, Ed, Ts_avg,Td_avg,no_of_fasteners,FastType)
 
+    CMatrix=compliance_matrix(no_of_fasteners, Cs, Cd, Cf)
+
 # If verbose state is requested print intermediate matrices
     if verbose:
         print "This is a system of %s equations." %(no_of_fasteners)
         print
         print "The compliance matrix resolves to:"
         print
-        print_compliance_matrix(no_of_fasteners)
+        print_compliance_matrix(CMatrix)
         print
         print "The component stiffness matrices are:"
         print
@@ -138,19 +154,27 @@ def main():
         print "Cd=", Cd
         print "Cf=", Cf
         print
-    CMatrix=compliance_matrix(no_of_fasteners, Cs, Cd, Cf)
+        print "Fastener Compliance calculated using the %s method" %(capitalize(fastener_comp_type))
+        print
+
 # Solve Linear System Equation of the type
 # a X = b
     a=np.array(CMatrix)
     b=P*np.array(Cs)
     fastener_loads = np.linalg.solve(a,b)
-    print "Fastener loads:" 
+
+# Print the resultant fastener loads
+
+    print "Fastener loads:"
     print
     print "F0...Fn=", fastener_loads
-##    sys.exit()
-
+    logging.shutdown()
 
 def plate_compliance(L,E,A, no):
+    '''
+    Calculate the compliance coefficient for any plate element
+    such as the skin and doublers.
+    '''
     C=[0 for _ in range(no)]
     for x in range(no):
         C[x]=L[x]/(E*A[x])
@@ -188,65 +212,85 @@ def Bcoeff(fast_type):
         B = 0.82
     return B
 
+def print_compliance_matrix(CMatrix):
+    max_length=0
+    for row in CMatrix:
+        max_length = max(max([len(elem.formula) for elem in row]),max_length)
+
+     # Brackets for first line
+    print unichr(0x250C),
+    print u'{:>{width}}'.format(unichr(0x2510),width=(max_length+3)*len(CMatrix[0])+1)
+
+    for row in CMatrix:
+        # Leading line
+        print unichr(0x2502),
+        for val in row:
+            print '{:{width}}'.format(val.formula, width=max_length+2),
+        # Trailing line
+        print unichr(0x2502)
+
+    # Brackets for last line
+    print unichr(0x2514),
+    print u'{:>{width}}'.format(unichr(0x2518),width=(max_length+3)*len(CMatrix[0])+1)
 
 def compliance_matrix(no_of_equations, Cs, Cd, Cf):
-# Set up a 2D matrix of zeroes to create the template for the Compliance Matrix.
-    A = [[0 for _ in range(no_of_equations)] for _ in range(no_of_equations)]
+# Set up a 2D matrix of zero Coefficient objects to create the template for the Compliance Matrix.
+    A = [[Coefficient(0) for _ in range(no_of_equations)] for _ in range(no_of_equations)]
 # Build the compliance matrix from the general equation
 # m = rows, n= columns
 
     for m in range(no_of_equations):
         for n in range(no_of_equations):
             if m>n:
-                A[m][n]=Cs[m]+ Cd[m]
+                A[m][n]=Coefficient(Cs[m]+ Cd[m], variables=["Cs"+str(m),"Cd"+str(m) ])
             elif m==n:
-                A[m][n]=Cs[m]+ Cd[m]+ Cf[m]
+				A[m][n]=Coefficient(Cs[m]+ Cd[m]+ Cf[m], variables=["Cs"+str(m),"Cd"+str(m), "Cf"+str(m) ])
             elif n==m+1:
-                A[m][m+1]=-Cf[m+1]
+				A[m][m+1]=Coefficient(-Cf[m+1], variables=["-Cf"+str(m+1)])
     return A
 
 
-def print_compliance_matrix(no_of_equations):
-# Set up a 2D matrix of zeroes to create the template for the Compliance Matrix.
-    A = [['0' for _ in range(no_of_equations)] for _ in range(no_of_equations)]
-# printing the equation as text can help check that the variables are correct
-# and the general equation is working
+class Coefficient:
 
-# work out max no. of characters
-# 12 + length of m
-# m = rows, n= columns
-    
-    no_characters = 12 + len(str(no_of_equations))
-    max_length=0
-    for m in range(no_of_equations):            
-        for n in range(no_of_equations):
-            if m>n:
-                A[m][n]="(Cs"+str(m)+" + Cd"+str(m)+")"
-                #A[m][n]= A[m][n].rjust(no_characters)
-            elif m==n:
-                A[m][n]="(Cs"+str(m)+" + Cd"+str(m)+" + Cf"+str(m)+")"
-                #A[m][n]= A[m][n].rjust(no_characters)
-            elif n==m+1:
-                A[m][m+1]="-Cf"+ str(m+1)
-                #A[m][m+1]=A[m][m+1].rjust(no_characters)
-        max_length = max(max([len(x) for x in A[m]]),max_length)
-    # Brackets for first line
-    print unichr(0x250C),
-    print u'{:>{width}}'.format(unichr(0x2510),width=(max_length+3)*len(A[0])+1)
-        
-    for row in A:
-        # Leading line
-        print unichr(0x2502),
-        for val in row:
-            print '{:{width}}'.format(val, width=max_length+2),
-        # Trailing line
-        print unichr(0x2502)
-    # Brackets for last line
-    print unichr(0x2514),
-    print u'{:>{width}}'.format(unichr(0x2518),width=(max_length+3)*len(A[0])+1)
-    
+    def __init__(self, value, formula="", variables=[]):
+        logging.debug("value = %f, Type = %s" %(value, type(value)))
+        self.value = float(value)
+        self.formula = formula
+        self.variables = variables
+        if self.value ==0:
+            self.formula = "0"
+        if len(self.variables) !=0:
+            self.formula = self.build_formula()
+            logging.debug("formula = %s" %(self.formula))
+
+    def __repr__(self):
+        logging.debug( "Type = %s" %(type(self.value)))
+        return self.value
 
 
+    def build_formula(self):
+        formula_string= ""
+        logging.debug("self.variables = %s" %(self.variables))
+        for i in range(len(self.variables)):
+            logging.debug("%d, " %(i))
+            if i==0:
+                formula_string=self.variables[0]
+            else:
+                formula_string=formula_string+self.join_variable(self.variables[i])
+        return formula_string
+
+    def join_variable(self,this_variable):
+        if this_variable[0]=="-":
+            join_string = " - "
+        else:
+            join_string = " + "
+        return join_string+this_variable
+
+    def __float__(self):
+        return self.value
+
+    def __len__(self):
+        return len(self.formula)
 
 if __name__ == '__main__':
     main()
